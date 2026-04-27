@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 Monthly Sales MPF Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #378ADD;
+    --red: #D85A30;
+    --green: #639922;
+    --amber: #BA7517;
+    --purple-dark: #3C3489;
+    --purple-light: #CECBF6;
+    --bg: #F5F5F3;
+    --surface: #FFFFFF;
+    --surface2: #F1EFE8;
+    --text: #1a1a1a;
+    --text2: #666;
+    --text3: #999;
+    --border: rgba(0,0,0,0.1);
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .header-badge {
+    background: var(--purple-dark);
+    color: var(--purple-light);
+    font-size: 11px; font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.02em;
+  }
+  .refresh-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text2);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .refresh-btn:hover { background: #e8e6de; }
+  .refresh-btn .spin { display: inline-block; transition: transform 0.5s; }
+  .refresh-btn.loading .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Layout ── */
+  .main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+
+  /* ── API config banner ── */
+  .api-banner {
+    background: #FAEEDA;
+    border: 1px solid #EF9F27;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: #633806;
+  }
+  .api-banner input {
+    flex: 1;
+    font-size: 12px;
+    font-family: monospace;
+    padding: 6px 10px;
+    border: 1px solid #EF9F27;
+    border-radius: 6px;
+    background: #fff8ee;
+    color: #412402;
+    outline: none;
+  }
+  .api-banner button {
+    font-size: 12px;
+    padding: 6px 14px;
+    background: var(--purple-dark);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* ── Month selector ── */
+  .controls { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .month-btn {
+    font-size: 12px; font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .month-btn.active {
+    background: var(--purple-dark);
+    color: var(--purple-light);
+    border-color: var(--purple-dark);
+  }
+  .controls-label { font-size: 12px; color: var(--text3); margin-right: 4px; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+  .tab {
+    font-size: 13px; font-weight: 500;
+    padding: 8px 18px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .tab.active { color: var(--purple-dark); border-bottom-color: var(--purple-dark); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── KPI cards ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi-row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+  }
+  .kpi-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .kpi-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; margin-top: 5px; color: var(--text2); }
+  .kpi-sub.down { color: var(--red); }
+  .kpi-sub.up { color: var(--green); }
+
+  /* ── Annual progress card ── */
+  .annual-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 16px;
+  }
+  .annual-left { flex: 1; }
+  .annual-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .annual-value { font-size: 28px; font-weight: 700; color: var(--text); }
+  .prog-bg { height: 8px; background: var(--surface2); border-radius: 4px; margin-top: 10px; }
+  .prog-fill { height: 8px; border-radius: 4px; background: var(--blue); transition: width 0.6s ease; }
+  .annual-meta { font-size: 11px; color: var(--text2); margin-top: 5px; }
+  .annual-right { text-align: right; }
+  .annual-gap-label { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .annual-gap { font-size: 22px; font-weight: 600; color: var(--red); }
+
+  /* ── Chart grid ── */
+  .charts-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .charts-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+  }
+  .chart-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .legend { display: flex; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+  .li { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text2); }
+  .ld { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    font-size: 11px; font-weight: 500; color: var(--text3);
+    text-align: left; padding: 0 8px 6px 0;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th:not(:first-child) { text-align: right; }
+  td {
+    padding: 7px 8px 7px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    white-space: nowrap;
+  }
+  td:not(:first-child) { text-align: right; }
+  tr:last-child td { border-bottom: none; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .ph { background: #EAF3DE; color: #3B6D11; }
+  .pm { background: #FAEEDA; color: #854F0B; }
+  .pl { background: #FAECE7; color: #993C1D; }
+
+  /* ── User segment cards ── */
+  .seg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .seg-card { background: var(--surface2); border-radius: var(--radius); padding: 10px 12px; }
+  .seg-name { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .seg-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text); margin-bottom: 2px; }
+  .seg-rate { font-weight: 600; }
+  .pb-bg { height: 5px; background: var(--border); border-radius: 3px; margin-top: 6px; }
+  .pb-fill { height: 5px; border-radius: 3px; transition: width 0.6s ease; }
+
+  /* ── Loading overlay ── */
+  .loading-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(255,255,255,0.8);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .loading-overlay.show { display: flex; }
+  .loader { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--purple-dark); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  .loading-text { font-size: 13px; color: var(--text2); }
+
+  /* ── Error state ── */
+  .error-msg {
+    display: none;
+    background: #FCEBEB;
+    border: 1px solid #F09595;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #791F1F;
+    margin-bottom: 16px;
+  }
+  .error-msg.show { display: block; }
+
+  /* ── Last updated ── */
+  .last-updated { font-size: 11px; color: var(--text3); }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loader"></div>
+  <div class="loading-text">Google Sheets에서 데이터 불러오는 중...</div>
+</div>
+
+<div class="header">
+  <div class="header-left">
+    <span class="header-title">2026 Monthly Sales MPF</span>
+    <span class="header-badge" id="activeBadge">Apr 2026</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="last-updated" id="lastUpdated"></span>
+    <!-- Auto-refresh selector -->
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;">
+      <span>자동갱신</span>
+      <select id="autoRefreshSel" onchange="setAutoRefresh(this.value)"
+        style="font-size:11px;padding:4px 7px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#444;cursor:pointer;outline:none;">
+        <option value="0">OFF</option>
+        <option value="5">5분</option>
+        <option value="10" selected>10분</option>
+        <option value="30">30분</option>
+        <option value="10080">7일</option>
+      </select>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+      <span class="spin">↻</span> 새로고침
+    </button>
+    <a href="https://docs.google.com/spreadsheets/d/1vshw7prltBalagemPjkcc76jXxRlddk0TJhQaxhggV0/edit?gid=2058878130#gid=2058878130"
+      target="_blank"
+      style="font-size:12px;padding:6px 12px;background:#F1EFE8;border:1px solid #ddd;border-radius:8px;color:#444;text-decoration:none;white-space:nowrap;">
+      📊 시트 열기
+    </a>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- API Key 입력 -->
+  <div class="api-banner" id="apiBanner">
+    <div style="padding-top:2px;">🔑</div>
+    <div style="flex:1;">
+      <div style="font-weight:600;margin-bottom:6px;">Google Sheets API Key 필요</div>
+      <div style="margin-bottom:8px;font-size:12px;opacity:0.85;">
+        Google Cloud Console에서 Sheets API v4 키를 발급 후 입력하세요.
+        (<a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#854F0B;">발급 링크 ↗</a>)
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="apiKeyInput" placeholder="AIza..." />
+        <button onclick="saveApiKey()">저장 후 로드</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;padding:14px 16px;border-radius:10px;margin-bottom:16px;white-space:pre-wrap;max-height:300px;overflow-y:auto;line-height:1.6;"></div>
+  <button id="debugBtn" onclick="toggleDebug()" style="font-size:11px;margin-bottom:12px;display:none;">디버그 패널 보기</button>
+
+  <!-- Month selector -->
+  <div class="controls">
+    <span class="controls-label">월 선택</span>
+    <button class="month-btn active" data-month="0" onclick="selectMonth(0, this)">Jan</button>
+    <button class="month-btn" data-month="1" onclick="selectMonth(1, this)">Feb</button>
+    <button class="month-btn" data-month="2" onclick="selectMonth(2, this)">Mar</button>
+    <button class="month-btn" data-month="3" onclick="selectMonth(3, this)">Apr</button>
+    <button class="month-btn" data-month="4" onclick="selectMonth(4, this)">May</button>
+    <button class="month-btn" data-month="5" onclick="selectMonth(5, this)">Jun</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('monthly', this)">Monthly</button>
+    <button class="tab" onclick="switchTab('cumulative', this)">YTD Cumulative</button>
+  </div>
+
+  <!-- ── MONTHLY PANEL ── -->
+  <div id="panel-monthly" class="panel active">
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Total Goal</div>
+        <div class="kpi-value" id="m-goal">—</div>
+        <div class="kpi-sub">월 목표</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Achieved</div>
+        <div class="kpi-value" id="m-ach">—</div>
+        <div class="kpi-sub down" id="m-gap">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Achievement Rate</div>
+        <div class="kpi-value" id="m-rate">—</div>
+        <div class="kpi-sub down" id="m-remain">—</div>
+      </div>
+    </div>
+
+    <div class="charts-3">
+      <div class="chart-card">
+        <div class="chart-title">Regional overview</div>
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>Goal</span>
+          <span class="li"><span class="ld" style="background:#D85A30"></span>Ach</span>
+        </div>
+        <div style="position:relative;height:190px;">
+          <canvas id="c-region" role="img" aria-label="Regional goal vs achieved bar chart">Regional data</canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">US — new vs user sales</div>
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>Goal</span>
+          <span class="li"><span class="ld" style="background:#D85A30"></span>Ach</span>
+        </div>
+        <div style="position:relative;height:190px;">
+          <canvas id="c-us" role="img" aria-label="US new vs user sales chart">US sales data</canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Achievement rate (%)</div>
+        <div style="position:relative;height:190px;">
+          <canvas id="c-rate" role="img" aria-label="Achievement rate by region">Rate data</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-2">
+      <div class="chart-card">
+        <div class="chart-title">Regional detail</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr><th>Region</th><th>Goal</th><th>Ach</th><th>Rate</th></tr>
+            </thead>
+            <tbody id="regional-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">User segment</div>
+        <div class="seg-grid" id="seg-grid"></div>
+        <div class="tbl-wrap" style="margin-top:10px;">
+          <table>
+            <thead><tr><th>Category</th><th>Type</th><th>Goal</th><th>Ach</th><th>Rate</th></tr></thead>
+            <tbody id="product-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Forecast -->
+    <div style="margin-top:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div>
+          <span style="font-size:14px;font-weight:600;color:var(--text)">Pipeline Forecast</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:8px;">진행 중인 딜 기반 예상 매출</span>
+        </div>
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--text2);">
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#BA7517;border-radius:2px"></span>50% (I1/I2/D1/D2)</span>
+          <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;background:#378ADD;border-radius:2px"></span>80% (D3/M1/M2)</span>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:var(--surface2);">
+              <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:500;color:var(--text3);border-bottom:1px solid var(--border);">Region</th>
+              <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:500;color:#BA7517;border-bottom:1px solid var(--border);">50% Possibility</th>
+              <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:500;color:#378ADD;border-bottom:1px solid var(--border);">80% Possibility</th>
+              <th style="padding:10px 14px;text-align:right;font-size:11px;font-weight:500;color:var(--text3);border-bottom:1px solid var(--border);">Combined Est.</th>
+            </tr>
+          </thead>
+          <tbody id="pipeline-tbody">
+            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text3);font-size:12px;">데이터 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CUMULATIVE PANEL ── -->
+  <div id="panel-cumulative" class="panel">
+    <div class="annual-card">
+      <div class="annual-left">
+        <div class="annual-title">Annual Goal (ACC)</div>
+        <div class="annual-value" id="ann-goal">—</div>
+        <div class="prog-bg"><div class="prog-fill" id="ann-bar" style="width:0%"></div></div>
+        <div class="annual-meta" id="ann-meta">—</div>
+      </div>
+      <div class="annual-right">
+        <div class="annual-gap-label">YTD Gap</div>
+        <div class="annual-gap" id="ann-gap">—</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">vs cumulative goal</div>
+      </div>
+    </div>
+
+    <div class="kpi-row-4" id="ytd-kpis"></div>
+
+    <div class="chart-card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span class="chart-title">Cumulative Goal vs Achieved — YTD</span>
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>Goal</span>
+          <span class="li"><span class="ld" style="background:#D85A30"></span>Achieved</span>
+        </div>
+      </div>
+      <div style="position:relative;height:260px;">
+        <canvas id="c-cumul" role="img" aria-label="Cumulative goal vs achieved area chart">Cumulative data</canvas>
+      </div>
+    </div>
+
+    <div class="charts-2">
+      <div class="chart-card">
+        <div class="chart-title">Monthly goal vs achieved</div>
+        <div class="legend" style="margin-bottom:6px;">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>Goal</span>
+          <span class="li"><span class="ld" style="background:#D85A30"></span>Ach</span>
+        </div>
+        <div style="position:relative;height:190px;">
+          <canvas id="c-monthly" role="img" aria-label="Monthly goal vs achieved bar chart">Monthly data</canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Monthly achievement rate (%)</div>
+        <div style="position:relative;height:190px;">
+          <canvas id="c-mrate" role="img" aria-label="Monthly achievement rate bar chart">Monthly rate</canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ────────────────────────────────────────
+   CONFIG
+──────────────────────────────────────── */
+const SHEET_ID = '1vshw7prltBalagemPjkcc76jXxRlddk0TJhQaxhggV0';
+const SHEET_NAME = encodeURIComponent('2026 Sales Record');
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const BLUE='#378ADD', RED='#D85A30', GREEN='#639922', AMBER='#BA7517';
+const gridColor = 'rgba(0,0,0,0.06)';
+
+let currentMonth = 3; // 0-based, default Apr
+let charts = {};
+let rawData = null;
+
+/* ────────────────────────────────────────
+   API KEY MANAGEMENT
+──────────────────────────────────────── */
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) return alert('API 키를 입력해주세요.');
+  localStorage.setItem('sheets_api_key', key);
+  document.getElementById('apiBanner').style.display = 'none';
+  loadData();
+}
+
+function getApiKey() {
+  return localStorage.getItem('sheets_api_key') || '';
+}
+
+// DOMContentLoaded handled in setAutoRefresh block above
+
+/* ────────────────────────────────────────
+   DATA LOADING
+──────────────────────────────────────── */
+async function loadData() {
+  const key = getApiKey();
+  if (!key) return;
+
+  showLoading(true);
+  hideError();
+  document.getElementById('refreshBtn').classList.add('loading');
+
+  try {
+    // Fetch both sheets in parallel
+    const salesTab = encodeURIComponent("'2026 Sales Record'!A1:Q60");
+    const dealTab  = encodeURIComponent("'HQ Deal History'!A1:Z2000");
+    const baseUrl  = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/`;
+
+    const [salesRes, dealRes] = await Promise.all([
+      fetch(`${baseUrl}${salesTab}?key=${key}`),
+      fetch(`${baseUrl}${dealTab}?key=${key}`)
+    ]);
+
+    if (!salesRes.ok) { const e = await salesRes.json(); throw new Error('Sales: ' + (e.error?.message||salesRes.status)); }
+    if (!dealRes.ok)  { const e = await dealRes.json();  throw new Error('Deals: ' + (e.error?.message||dealRes.status)); }
+
+    const salesJson = await salesRes.json();
+    const dealJson  = await dealRes.json();
+    const rawValues = salesJson.values || [];
+    const dealValues = dealJson.values || [];
+
+    // Debug panel
+    const debugLines = rawValues.slice(0, 30).map((r,i) =>
+      `R${String(i+1).padStart(2,'0')}: ${(r||[]).slice(0,10).map(c => String(c||'').padEnd(14,' ').slice(0,14)).join(' | ')}`
+    );
+    document.getElementById('debugPanel').textContent =
+      '=== 2026 Sales Record ===\n' + debugLines.join('\n') + '\n\n' +
+      '=== HQ Deal History headers ===\n' + (dealValues[0]||[]).map(function(h,i){ return '['+i+'] '+h; }).join(' | ') + '\n\n' +
+      '=== HQ Deal History rows 2-4 ===\n' + dealValues.slice(1,4).map(function(r,i){ return 'R'+(i+2)+': '+(r||[]).slice(0,8).join(' | '); }).join('\n');
+    document.getElementById('debugBtn').style.display = 'inline-block';
+
+    rawData = parseSheetData(rawValues);
+    rawData.deals = parseDealData(dealValues);
+    renderAll();
+    document.getElementById('lastUpdated').textContent = '마지막 업데이트: ' + new Date().toLocaleTimeString('ko-KR');
+  } catch (e) {
+    showError('데이터 로드 실패: ' + e.message + ' — API 키 또는 시트 접근 권한을 확인하세요.');
+  } finally {
+    showLoading(false);
+    document.getElementById('refreshBtn').classList.remove('loading');
+  }
+}
+
+/* ──────────────────────────────────────────
+   DEAL PARSER — HQ Deal History tab
+   - 50%: stages containing I1/I2/D1/D2
+   - 80%: stages containing D3/M1/M2
+   Region from Sales Category (사업관리조직) / Sales Country (사업국가)
+─────────────────────────────────────────── */
+function parseDealData(rows) {
+  if (!rows || rows.length < 2) return {};
+
+  // Coefficient adds 2 meta rows before actual headers:
+  // Row 0: "HubSpot Import / Last updated..."
+  // Row 1: actual column headers (Deal Name | Amount | Close Date | ...)
+  // Row 2+: data
+  // Find the actual header row by scanning for 'Amount' or 'Deal'
+  let headerRowIdx = 0;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const r = (rows[i]||[]).map(c => String(c||'').toLowerCase());
+    if (r.some(c => c === 'amount' || c === 'deal name' || c.includes('deal stage'))) {
+      headerRowIdx = i;
+      break;
+    }
+  }
+  const dataStartIdx = headerRowIdx + 1;
+
+  const headers = (rows[headerRowIdx]||[]).map(h => String(h||'').trim().toLowerCase());
+  const col = (...names) => {
+    for (const name of names) {
+      const idx = headers.findIndex(h => h.includes(name.toLowerCase()));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const amtCol   = col('amount');
+  const dateCol  = col('close date', 'closedate', 'close_date');
+  const stageCol = col('deal stage', 'dealstage', 'stage');
+  const catCol   = col('sales category', '사업관리', 'category');
+  const cntryCol = col('sales country', '사업국가', 'country');
+  const nameCol2 = col('deal name', 'name');
+  const enrCol   = col('[hq] enr company', 'enr company', 'enr');
+
+  console.log('[DEALS] headerRowIdx:', headerRowIdx, 'dataStartIdx:', dataStartIdx);
+  console.log('[DEALS] headers:', JSON.stringify(headers.slice(0,10)));
+  console.log('[DEALS] col indices — amt:', amtCol, 'date:', dateCol, 'stage:', stageCol, 'cat:', catCol, 'cntry:', cntryCol);
+
+  // Log first 3 data rows to verify
+  for (let i = dataStartIdx; i <= Math.min(dataStartIdx+2, rows.length-1); i++) {
+    const r = rows[i]||[];
+    console.log('[DEALS] row'+i+': stage='+r[stageCol]+' amount='+r[amtCol]+' date='+r[dateCol]+' cat='+r[catCol]+' cntry='+r[cntryCol]);
+  }
+
+  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const result = {};
+  MONTH_LABELS.forEach(function(m) {
+    result[m] = {
+      p50: { usNew:0, usExist:0, ca:0, str:0, geo:0 },
+      p80: { usNew:0, usExist:0, ca:0, str:0, geo:0 }
+    };
+  });
+
+  const parseMoney = s => parseFloat(String(s||'').replace(/[$,\s]/g,''))||0;
+
+  const getProb = stage => {
+    const s = String(stage||'').toUpperCase();
+    if (/I1|I2|D1|D2/.test(s)) return 50;
+    if (/D3|M1|M2/.test(s))    return 80;
+    return 0;
+  };
+
+  const getRegion = (cat, cntry, dealName) => {
+    const c = String(cat||'').toLowerCase();
+    const n = String(cntry||'').toLowerCase();
+    const d = String(dealName||'').toLowerCase();
+    if (n.includes('canada') || d.startsWith('(can') || d.includes('- can')) return 'ca';
+    if (c.includes('structure') || c.includes('gen'))  return 'str';
+    if (c.includes('geotech') || c.includes('gts'))    return 'geo';
+    if (c.includes('new')) return 'usNew';
+    return 'usExist';
+  };
+
+  // Flexible date parser: handles YYYY-MM-DD HH:mm:ss, MM/DD/YYYY, timestamps
+  const parseDate = raw => {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    // Unix timestamp (ms)
+    if (/^\d{10,13}$/.test(s)) {
+      const ts = parseInt(s);
+      return new Date(ts > 1e12 ? ts : ts * 1000);
+    }
+    // YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
+    const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2])-1, parseInt(iso[3]));
+    // MM/DD/YYYY
+    const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1])-1, parseInt(mdy[2]));
+    return new Date(s);
+  };
+
+  // Deal name col (col 0 usually)
+  const nameCol = col('deal name', 'name') >= 0 ? col('deal name','name') : 0;
+
+  let matched = 0, skipped = 0;
+  for (let i = dataStartIdx; i < rows.length; i++) {
+    const row   = rows[i]||[];
+    const stage = row[stageCol] || '';
+    const prob  = getProb(stage);
+    if (prob === 0) { skipped++; continue; }
+
+    // Only include deals where [HQ] ENR Company is blank/whitespace
+    if (enrCol >= 0) {
+      const enrVal = String(row[enrCol]||'').trim();
+      if (enrVal !== '') { skipped++; continue; }
+    }
+
+    const amount  = parseMoney(row[amtCol]);
+    if (!amount) { skipped++; continue; }
+
+    const closeDate = parseDate(row[dateCol]);
+    if (!closeDate || isNaN(closeDate)) { skipped++; continue; }
+
+    const year = closeDate.getFullYear();
+    if (year !== 2026) { skipped++; continue; }
+
+    const mLabel = MONTH_LABELS[closeDate.getMonth()];
+    if (!result[mLabel]) { skipped++; continue; }
+
+    const region = getRegion(row[catCol], row[cntryCol], row[nameCol2]);
+    const key    = prob === 50 ? 'p50' : 'p80';
+    if (result[mLabel][key][region] !== undefined) {
+      result[mLabel][key][region] += amount; // 원금액 그대로 표기
+    }
+    matched++;
+  }
+
+  console.log("[DEALS] processed: " + (matched) + " matched, " + (skipped) + " skipped");
+  MONTH_LABELS.forEach(m => {
+    const d = result[m];
+    const tot = (d.p50.usNew||0)+(d.p50.usExist||0)+d.p50.ca+d.p50.str+d.p50.geo+(d.p80.usNew||0)+(d.p80.usExist||0)+d.p80.ca+d.p80.str+d.p80.geo;
+    if (tot > 0) console.log("[DEALS] " + (m) + ": p50=" + (JSON.stringify(d.p50)) + " p80=" + (JSON.stringify(d.p80)) + "");
+  });
+
+  return result;
+}
+
+/* ──────────────────────────────────────────
+   SHEET PARSER v4
+   Confirmed structure from debug panel:
+   - "Sales Goal" header is in some row (goalHeaderRow)
+   - Month labels (Jan, Feb...) can be in ANY column
+   - Data rows have region in col A or B
+   - Jan column found by scanning for exact 'Jan' text
+   Split: rows above goalHeaderRow = Record, below = Goal
+─────────────────────────────────────────── */
+function parseSheetData(rows) {
+  const getCell = (r, c) => String((rows[r]||[])[c]||'').trim();
+  const parseMoney = s => parseFloat(String(s||'').replace(/[$,]/g,''))||0;
+
+  // Step 1: Find goalHeaderRow (row containing "Sales Goal")
+  let goalHeaderRow = -1;
+  for (let i = 0; i < rows.length; i++) {
+    if ((rows[i]||[]).some(c => String(c||'').includes('Sales Goal'))) {
+      goalHeaderRow = i; break;
+    }
+  }
+  if (goalHeaderRow < 0) throw new Error('Sales Goal 헤더 미발견');
+
+  // Step 2: Find Jan column — scan ALL rows, Jan can be in any column
+  // Priority: find it in the Goal section's header row for accuracy
+  let janCol = -1;
+  for (let i = goalHeaderRow; i < Math.min(goalHeaderRow+5, rows.length); i++) {
+    const row = rows[i]||[];
+    for (let c = 0; c < row.length; c++) {
+      if (String(row[c]||'').trim() === 'Jan') { janCol = c; break; }
+    }
+    if (janCol >= 0) break;
+  }
+  // Fallback: search everywhere
+  if (janCol < 0) {
+    outer: for (let i = 0; i < rows.length; i++) {
+      for (let c = 0; c < (rows[i]||[]).length; c++) {
+        if (String((rows[i]||[])[c]||'').trim() === 'Jan') { janCol = c; break outer; }
+      }
+    }
+  }
+  if (janCol < 0) janCol = 2;
+
+  console.log('[MPF v4] goalHeaderRow:', goalHeaderRow, 'janCol:', janCol);
+
+  // Step 3: Classify each row as Record or Goal by position
+  // A row belongs to "Record" if its index < goalHeaderRow, else "Goal"
+  // Match rows where col A or B has region keywords
+  const recRows = {}, goalRows = {};
+
+  const classify = (i, target) => {
+    // Look in all columns for region/type keywords
+    const rowText = (rows[i]||[]).map(c=>String(c||'').toLowerCase());
+    const full = rowText.join('|');
+    const a = rowText[0]||'', b = rowText[1]||'';
+
+    if ((a.includes('united') || a.includes('states')) && b.includes('new'))   target.usNew  = i;
+    else if ((a.includes('united') || a.includes('states')) && b.includes('user'))  target.usUser = i;
+    else if (a.includes('canada') && b.includes('new'))    target.caNew  = i;
+    else if (a.includes('canada') && b.includes('user'))   target.caUser = i;
+    else if (a.includes('structure'))                       target.strGen = i;
+    else if (a.includes('geotech'))                         target.geoGts = i;
+  };
+
+  for (let i = 0; i < rows.length; i++) {
+    if (i < goalHeaderRow) classify(i, recRows);
+    else classify(i, goalRows);
+  }
+
+  console.log('[MPF v4] recRows:', JSON.stringify(recRows));
+  console.log('[MPF v4] goalRows:', JSON.stringify(goalRows));
+
+  // Log sample values for verification
+  const KEYS = ['usNew','usUser','caNew','caUser','strGen','geoGts'];
+  KEYS.forEach(k => {
+    if (recRows[k]  != null) console.log("[MPF] rec." + (k) + "  row" + (recRows[k]) + "  jan=" + ( (rows[recRows[k]]||[])[janCol]) + "");
+    if (goalRows[k] != null) console.log("[MPF] goal." + (k) + " row" + (goalRows[k]) + " jan=" + ( (rows[goalRows[k]]||[])[janCol]) + "");
+  });
+
+  const getVal = (map, key, mIdx) => {
+    const ri = map[key];
+    if (ri == null) return 0;
+    return parseMoney((rows[ri]||[])[janCol + mIdx]);
+  };
+
+  const result = {
+    record: Object.fromEntries(KEYS.map(k=>[k,[]])),
+    goal:   Object.fromEntries(KEYS.map(k=>[k,[]]))
+  };
+
+  for (let m = 0; m < 12; m++) {
+    KEYS.forEach(k => {
+      result.record[k].push(getVal(recRows,  k, m));
+      result.goal[k].push(  getVal(goalRows, k, m));
+    });
+  }
+
+  return result;
+}
+
+/* ────────────────────────────────────────
+   RENDER
+──────────────────────────────────────── */
+function renderAll() {
+  if (!rawData) return;
+  renderMonthly();
+  renderCumulative();
+  renderPipeline();
+}
+
+function renderPipeline() {
+  var deals = rawData.deals;
+  var MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var monthLabel = MONTH_LABELS[currentMonth];
+  var tbody = document.getElementById('pipeline-tbody');
+  if (!tbody) return;
+
+  if (!deals || !deals[monthLabel]) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#999;font-size:12px;">딜 데이터 없음</td></tr>';
+    return;
+  }
+
+  var d = deals[monthLabel];
+  var fmt = function(v) {
+    if (v > 0) return '$' + Math.round(v).toLocaleString();
+    return '<span style="color:#bbb">—</span>';
+  };
+
+  // US subtotal
+  var us50 = (d.p50.usNew||0) + (d.p50.usExist||0);
+  var us80 = (d.p80.usNew||0) + (d.p80.usExist||0);
+
+  // Grand total
+  var tot50 = us50 + (d.p50.ca||0) + (d.p50.str||0) + (d.p50.geo||0);
+  var tot80 = us80 + (d.p80.ca||0) + (d.p80.str||0) + (d.p80.geo||0);
+
+  var TH = 'style="padding:9px 12px;color:#1a1a1a;font-weight:600;background:#f5f5f3"';
+  var TD = 'style="padding:9px 12px;color:#555;font-weight:400;padding-left:26px"';
+  var borderRow = 'style="border-bottom:1px solid #eee"';
+  var html = '';
+
+  // ── United States group header
+  html += '<tr style="background:#f5f5f3;border-bottom:1px solid #ddd">';
+  html += '<td ' + TH + '>United States</td>';
+  html += '<td style="padding:9px 12px;text-align:right;color:#BA7517;font-weight:600;background:#f5f5f3">' + fmt(us50) + '</td>';
+  html += '<td style="padding:9px 12px;text-align:right;color:#378ADD;font-weight:600;background:#f5f5f3">' + fmt(us80) + '</td>';
+  html += '<td style="padding:9px 12px;text-align:right;color:#1a1a1a;font-weight:600;background:#f5f5f3">' + fmt(us50+us80) + '</td>';
+  html += '</tr>';
+
+  // ── US New sub-row
+  html += '<tr ' + borderRow + '>';
+  html += '<td style="padding:8px 12px 8px 26px;color:#555">↳ New (North America New)</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#BA7517">' + fmt(d.p50.usNew||0) + '</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#378ADD">' + fmt(d.p80.usNew||0) + '</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#666">' + fmt((d.p50.usNew||0)+(d.p80.usNew||0)) + '</td>';
+  html += '</tr>';
+
+  // ── US Exist sub-row
+  html += '<tr ' + borderRow + '>';
+  html += '<td style="padding:8px 12px 8px 26px;color:#555">↳ Exist (North America Exist)</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#BA7517">' + fmt(d.p50.usExist||0) + '</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#378ADD">' + fmt(d.p80.usExist||0) + '</td>';
+  html += '<td style="padding:8px 12px;text-align:right;color:#666">' + fmt((d.p50.usExist||0)+(d.p80.usExist||0)) + '</td>';
+  html += '</tr>';
+
+  // ── Other regions
+  var others = [
+    { label: 'Canada',    k50: d.p50.ca||0,  k80: d.p80.ca||0  },
+    { label: 'Structure', k50: d.p50.str||0, k80: d.p80.str||0 },
+    { label: 'Geotech',  k50: d.p50.geo||0, k80: d.p80.geo||0 }
+  ];
+  others.forEach(function(r) {
+    html += '<tr ' + borderRow + '>';
+    html += '<td style="padding:9px 12px;color:#1a1a1a;font-weight:500">' + r.label + '</td>';
+    html += '<td style="padding:9px 12px;text-align:right;color:#BA7517">' + fmt(r.k50) + '</td>';
+    html += '<td style="padding:9px 12px;text-align:right;color:#378ADD">' + fmt(r.k80) + '</td>';
+    html += '<td style="padding:9px 12px;text-align:right;color:#1a1a1a">' + fmt(r.k50+r.k80) + '</td>';
+    html += '</tr>';
+  });
+
+  // ── Total
+  html += '<tr style="background:#F1EFE8;border-top:2px solid #d4d0c8">';
+  html += '<td style="padding:10px 12px;font-weight:700;color:#1a1a1a">Total</td>';
+  html += '<td style="padding:10px 12px;text-align:right;font-weight:700;color:#BA7517">' + fmt(tot50) + '</td>';
+  html += '<td style="padding:10px 12px;text-align:right;font-weight:700;color:#378ADD">' + fmt(tot80) + '</td>';
+  html += '<td style="padding:10px 12px;text-align:right;font-weight:700;color:#1a1a1a">' + fmt(tot50+tot80) + '</td>';
+  html += '</tr>';
+
+  tbody.innerHTML = html;
+}
+
+function renderMonthly() {
+  const m = currentMonth;
+  const r = rawData.record, g = rawData.goal;
+
+  const usAch  = r.usNew[m]  + r.usUser[m];
+  const usGoal = g.usNew[m]  + g.usUser[m];
+  const caAch  = r.caNew[m]  + r.caUser[m];
+  const caGoal = g.caNew[m]  + g.caUser[m];
+  const strAch  = r.strGen[m];
+  const strGoal = g.strGen[m];
+  const geoAch  = r.geoGts[m];
+  const geoGoal = g.geoGts[m];
+
+  const totalGoal = usGoal + caGoal + strGoal + geoGoal;
+  const totalAch  = usAch  + caAch  + strAch  + geoAch;
+  const totalRate = totalGoal > 0 ? Math.round(totalAch/totalGoal*100) : 0;
+  const gap = totalAch - totalGoal;
+
+  // KPIs
+  document.getElementById('m-goal').textContent   = '$' + totalGoal.toLocaleString();
+  document.getElementById('m-ach').textContent    = '$' + totalAch.toLocaleString();
+  document.getElementById('m-rate').textContent   = totalRate + '%';
+  document.getElementById('m-gap').textContent    = (gap >= 0 ? '+' : '') + '$' + gap.toLocaleString() + ' vs goal';
+  document.getElementById('m-gap').className      = 'kpi-sub ' + (gap >= 0 ? 'up' : 'down');
+  document.getElementById('m-remain').textContent = (100 - totalRate) + '% remaining';
+
+  // Region chart — US New / US User / Canada / Structure / Geotech
+  const regionLabels = ['US New','US User','Canada','Structure','Geotech'];
+  const regionGoals  = [g.usNew[m], g.usUser[m], caGoal, strGoal, geoGoal];
+  const regionAchs   = [r.usNew[m], r.usUser[m], caAch,  strAch,  geoAch];
+  buildOrUpdate('c-region', 'bar', regionLabels, [
+    { label:'Goal', data: regionGoals, backgroundColor: BLUE, borderRadius:3 },
+    { label:'Ach',  data: regionAchs,  backgroundColor: RED,  borderRadius:3 }
+  ], { yFmt: v => '$'+(v/1000).toFixed(0)+'k' });
+
+  // US breakdown chart (same data, kept for detail view)
+  buildOrUpdate('c-us', 'bar', ['New sales','User sales'], [
+    { label:'Goal', data:[g.usNew[m], g.usUser[m]], backgroundColor: BLUE, borderRadius:3 },
+    { label:'Ach',  data:[r.usNew[m], r.usUser[m]], backgroundColor: RED,  borderRadius:3 }
+  ], { yFmt: v => '$'+(v/1000).toFixed(0)+'k' });
+
+  // Rate chart
+  const rates = regionGoals.map((goal,i) =>
+    goal > 0 ? Math.round(regionAchs[i]/goal*100) : 0);
+  buildOrUpdate('c-rate', 'bar', regionLabels, [
+    { label:'Rate', data: rates,
+      backgroundColor: rates.map(r2 => r2>=100?GREEN:r2>=70?AMBER:RED), borderRadius:3 }
+  ], { yFmt: v => v+'%', yMax: 160 });
+
+  // Regional table — US split into New/User sub-rows
+  const tbody = document.getElementById('regional-tbody');
+  var tHtml = '';
+
+  // Helper
+  var mkRow = function(name, goal, ach, indent) {
+    var rate = goal > 0 ? Math.round(ach/goal*100) : 0;
+    var pc = rate>=100?'ph':rate>=60?'pm':'pl';
+    var bg = indent ? 'background:#fafaf8;' : '';
+    var pl = indent ? 'padding-left:22px;' : '';
+    var fw = indent ? 'font-weight:400;color:#555' : 'font-weight:500;color:#1a1a1a';
+    return '<tr style="border-bottom:1px solid #eee;'+bg+'">' +
+      '<td style="padding:8px 12px;'+pl+fw+'">'+name+'</td>' +
+      '<td style="padding:8px 12px;text-align:right">$'+goal.toLocaleString()+'</td>' +
+      '<td style="padding:8px 12px;text-align:right">$'+ach.toLocaleString()+'</td>' +
+      '<td style="padding:8px 12px;text-align:right"><span class="pill '+pc+'">'+rate+'%</span></td>' +
+      '</tr>';
+  };
+
+  // US group header
+  tHtml += '<tr style="background:#f5f5f3;border-bottom:1px solid #ccc">' +
+    '<td style="padding:9px 12px;font-weight:600;color:#1a1a1a">United States</td>' +
+    '<td style="padding:9px 12px;text-align:right;font-weight:600">$'+usGoal.toLocaleString()+'</td>' +
+    '<td style="padding:9px 12px;text-align:right;font-weight:600">$'+usAch.toLocaleString()+'</td>' +
+    '<td style="padding:9px 12px;text-align:right"><span class="pill '+(usGoal>0&&Math.round(usAch/usGoal*100)>=100?'ph':usGoal>0&&Math.round(usAch/usGoal*100)>=60?'pm':'pl')+'">'+
+    (usGoal>0?Math.round(usAch/usGoal*100):0)+'%</span></td></tr>';
+
+  // US sub-rows
+  tHtml += mkRow('↳ New Sales',  g.usNew[m],  r.usNew[m],  true);
+  tHtml += mkRow('↳ User Sales', g.usUser[m], r.usUser[m], true);
+
+  // Other regions
+  tHtml += mkRow('Canada',   caGoal,    caAch,    false);
+  tHtml += mkRow('Structure', strGoal,  strAch,   false);
+  tHtml += mkRow('Geotech',  geoGoal,   geoAch,   false);
+
+  // Total
+  var totRate = totalGoal > 0 ? Math.round(totalAch/totalGoal*100) : 0;
+  var totPc = totRate>=100?'ph':totRate>=60?'pm':'pl';
+  tHtml += '<tr style="background:#F1EFE8;border-top:2px solid #d4d0c8">' +
+    '<td style="padding:10px 12px;font-weight:700">Total</td>' +
+    '<td style="padding:10px 12px;text-align:right;font-weight:700">$'+totalGoal.toLocaleString()+'</td>' +
+    '<td style="padding:10px 12px;text-align:right;font-weight:700">$'+totalAch.toLocaleString()+'</td>' +
+    '<td style="padding:10px 12px;text-align:right"><span class="pill '+totPc+'">'+totRate+'%</span></td>' +
+    '</tr>';
+
+  tbody.innerHTML = tHtml;
+
+  // User segment
+  const usUserRate = g.usUser[m] > 0 ? (r.usUser[m]/g.usUser[m]*100).toFixed(2) : 0;
+  const usNewRate  = (g.usNew[m]+g.caNew[m]) > 0
+    ? ((r.usNew[m]+r.caNew[m])/(g.usNew[m]+g.caNew[m])*100).toFixed(2) : 0;
+  var usrColor = usUserRate>=100?GREEN:RED;
+  var unrColor = usNewRate>=100?GREEN:RED;
+  var usrW = Math.min(100,usUserRate);
+  var unrW = Math.min(100,usNewRate);
+  document.getElementById('seg-grid').innerHTML =
+    '<div class="seg-card">' +
+      '<div class="seg-name">US User</div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Ach</span><span>$'+r.usUser[m].toLocaleString()+'</span></div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Goal</span><span>$'+g.usUser[m].toLocaleString()+'</span></div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Rate</span><span class="seg-rate" style="color:'+usrColor+'">'+usUserRate+'%</span></div>' +
+      '<div class="pb-bg"><div class="pb-fill" style="width:'+usrW+'%;background:'+usrColor+'"></div></div>' +
+    '</div>' +
+    '<div class="seg-card">' +
+      '<div class="seg-name">US New &amp; CA</div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Ach</span><span>$'+(r.usNew[m]+r.caNew[m]).toLocaleString()+'</span></div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Goal</span><span>$'+(g.usNew[m]+g.caNew[m]).toLocaleString()+'</span></div>' +
+      '<div class="seg-row"><span style="color:#999;font-size:11px">Rate</span><span class="seg-rate" style="color:'+unrColor+'">'+usNewRate+'%</span></div>' +
+      '<div class="pb-bg"><div class="pb-fill" style="width:'+unrW+'%;background:'+unrColor+'"></div></div>' +
+    '</div>';
+
+  // Product table
+  var strRate = strGoal>0?Math.round(strAch/strGoal*100):0;
+  var geoRate = geoGoal>0?Math.round(geoAch/geoGoal*100):0;
+  var strPc = strRate>=100?'ph':strRate>=60?'pm':'pl';
+  var geoPc = geoRate>=100?'ph':geoRate>=60?'pm':'pl';
+  document.getElementById('product-tbody').innerHTML =
+    '<tr><td>Structure</td><td style="color:#999">Gen</td><td>$'+g.strGen[m].toLocaleString()+'</td><td>$'+r.strGen[m].toLocaleString()+'</td><td><span class="pill '+strPc+'">'+strRate+'%</span></td></tr>' +
+    '<tr><td>Geotech</td><td style="color:#999">GTS NX</td><td>$'+g.geoGts[m].toLocaleString()+'</td><td>$'+r.geoGts[m].toLocaleString()+'</td><td><span class="pill '+geoPc+'">'+geoRate+'%</span></td></tr>';
+}
+
+function renderCumulative() {
+  const r = rawData.record, g = rawData.goal;
+  const months = MONTHS.slice(0, currentMonth + 1);
+
+  // Build cumulative arrays up to selected month
+  let cumulGoal = [], cumulAch = [];
+  let runGoal = 0, runAch = 0;
+  for (let i = 0; i <= currentMonth; i++) {
+    runGoal += g.usNew[i]+g.usUser[i]+g.caNew[i]+g.caUser[i]+g.strGen[i]+g.geoGts[i];
+    runAch  += r.usNew[i]+r.usUser[i]+r.caNew[i]+r.caUser[i]+r.strGen[i]+r.geoGts[i];
+    cumulGoal.push(runGoal);
+    cumulAch.push(runAch);
+  }
+
+  // Annual goal: sum all 12 months of goal
+  let annGoal = 0;
+  for (let i = 0; i < 12; i++) {
+    annGoal += g.usNew[i]+g.usUser[i]+g.caNew[i]+g.caUser[i]+g.strGen[i]+g.geoGts[i];
+  }
+  const ytdAch = runAch;
+  const ytdGoal = runGoal;
+  const ytdPct = annGoal > 0 ? (ytdAch/annGoal*100).toFixed(1) : 0;
+  const ytdGap = ytdAch - ytdGoal;
+
+  document.getElementById('ann-goal').textContent = '$' + annGoal.toLocaleString();
+  document.getElementById('ann-bar').style.width = Math.min(100, ytdPct) + '%';
+  document.getElementById('ann-meta').innerHTML =
+    `YTD $${ytdAch.toLocaleString()} 달성 — <strong style="color:${BLUE}">${ytdPct}%</strong> of annual goal`;
+  document.getElementById('ann-gap').textContent =
+    (ytdGap>=0?'+':'-') + '$' + Math.abs(ytdGap).toLocaleString();
+
+  // YTD KPI cards per month
+  const kpiContainer = document.getElementById('ytd-kpis');
+  kpiContainer.innerHTML = months.map(function(mo, i) {
+    var monthGoal = g.usNew[i]+g.usUser[i]+g.caNew[i]+g.caUser[i]+g.strGen[i]+g.geoGts[i];
+    var monthAch  = r.usNew[i]+r.usUser[i]+r.caNew[i]+r.caUser[i]+r.strGen[i]+r.geoGts[i];
+    var gap2 = monthAch - monthGoal;
+    var cls = gap2>=0?'up':'down';
+    return '<div class="kpi"><div class="kpi-label">'+mo+' cumulative</div><div class="kpi-value">$'+cumulAch[i].toLocaleString()+'</div><div class="kpi-sub '+cls+'">Goal $'+cumulGoal[i].toLocaleString()+'</div></div>';
+  }).join('');
+
+  // Cumulative area chart
+  // Cumulative chart with achievement rate labels on Achieved line
+  if (charts['c-cumul']) { charts['c-cumul'].destroy(); }
+  var cumulCtx = document.getElementById('c-cumul');
+  if (cumulCtx) {
+    var rateLabels = cumulAch.map(function(ach, i) {
+      return cumulGoal[i] > 0 ? Math.round(ach / cumulGoal[i] * 100) + '%' : '—';
+    });
+    charts['c-cumul'] = new Chart(cumulCtx, {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          {
+            label: 'Goal',
+            data: cumulGoal,
+            borderColor: BLUE,
+            backgroundColor: 'rgba(55,138,221,0.1)',
+            fill: true, tension: 0.35,
+            pointRadius: 5, pointBackgroundColor: BLUE, borderWidth: 2
+          },
+          {
+            label: 'Achieved',
+            data: cumulAch,
+            borderColor: RED,
+            backgroundColor: 'rgba(216,90,48,0.08)',
+            fill: true, tension: 0.35,
+            pointRadius: 6, pointBackgroundColor: RED, borderWidth: 2,
+            borderDash: [4,3],
+            datalabels: {
+              display: true,
+              align: 'top',
+              anchor: 'end',
+              offset: 6,
+              color: RED,
+              font: { size: 11, weight: '600' },
+              formatter: function(value, ctx2) {
+                return rateLabels[ctx2.dataIndex];
+              }
+            }
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx2) {
+                return ctx2.dataset.label + ': $' + ctx2.parsed.y.toLocaleString();
+              }
+            }
+          },
+          datalabels: { display: false } // default off for Goal line
+        },
+        scales: {
+          x: { ticks: { font: { size: 12 } }, grid: { display: false } },
+          y: {
+            ticks: { font: { size: 11 }, callback: function(v) { return '$' + (v/1000000).toFixed(2) + 'M'; } },
+            grid: { color: 'rgba(0,0,0,0.06)' }
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+  // Monthly bar
+  const mGoal = months.map((_,i) => g.usNew[i]+g.usUser[i]+g.caNew[i]+g.caUser[i]+g.strGen[i]+g.geoGts[i]);
+  const mAch  = months.map((_,i) => r.usNew[i]+r.usUser[i]+r.caNew[i]+r.caUser[i]+r.strGen[i]+r.geoGts[i]);
+  buildOrUpdate('c-monthly', 'bar', months, [
+    { label:'Goal', data: mGoal, backgroundColor: BLUE, borderRadius:3 },
+    { label:'Ach',  data: mAch,  backgroundColor: RED,  borderRadius:3 }
+  ], { yFmt: v => '$'+(v/1000).toFixed(0)+'k' });
+
+  // Monthly rate
+  const mRates = mGoal.map((g2,i) => g2>0?Math.round(mAch[i]/g2*100):0);
+  buildOrUpdate('c-mrate', 'bar', months, [
+    { label:'Rate', data: mRates,
+      backgroundColor: mRates.map(v => v>=100?GREEN:v>=70?AMBER:RED), borderRadius:3 }
+  ], { yFmt: v => v+'%', yMax: 140, tooltip: v => v+'%' });
+}
+
+/* ────────────────────────────────────────
+   CHART HELPERS
+──────────────────────────────────────── */
+function buildOrUpdate(id, type, labels, datasets, opts={}) {
+  if (charts[id]) { charts[id].destroy(); }
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  charts[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx2 => {
+              const v = ctx2.parsed.y;
+              return ctx2.dataset.label + ': ' + (opts.tooltip ? opts.tooltip(v) : (opts.yFmt ? opts.yFmt(v) : v));
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font:{size:11}, autoSkip:false, maxRotation:0 }, grid:{display:false} },
+        y: {
+          ...(opts.yMax ? { max: opts.yMax } : {}),
+          ticks: { font:{size:11}, callback: opts.yFmt || (v=>v) },
+          grid: { color: gridColor }
+        }
+      }
+    }
+  });
+}
+
+/* ────────────────────────────────────────
+   UI HELPERS
+──────────────────────────────────────── */
+function selectMonth(idx, el) {
+  currentMonth = idx;
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('activeBadge').textContent = MONTHS[idx] + ' 2026';
+  if (rawData) renderAll();
+}
+
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+/* ── Auto-refresh ── */
+var _autoRefreshTimer = null;
+
+function setAutoRefresh(minutes) {
+  if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
+  var mins = parseInt(minutes);
+  if (mins > 0) {
+    _autoRefreshTimer = setInterval(function() {
+      console.log('[MPF] Auto-refresh triggered (' + mins + 'min)');
+      loadData();
+    }, mins * 60 * 1000);
+    console.log('[MPF] Auto-refresh set to every ' + mins + ' minutes');
+  }
+}
+
+// Start default auto-refresh (10min) when page loads and API key exists
+window.addEventListener('DOMContentLoaded', function() {
+  var key = getApiKey();
+  if (key) {
+    document.getElementById('apiBanner').style.display = 'none';
+    loadData();
+    setAutoRefresh(10); // default 10 min
+  }
+});
+
+function toggleDebug() {
+  const p = document.getElementById('debugPanel');
+  const b = document.getElementById('debugBtn');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  b.textContent = p.style.display === 'none' ? '디버그 패널 보기' : '디버그 패널 닫기';
+}
+function showLoading(v) {
+  document.getElementById('loadingOverlay').classList.toggle('show', v);
+}
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorMsg').classList.remove('show');
+}
+</script>
+</body>
+</html>
