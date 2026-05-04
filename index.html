@@ -748,16 +748,18 @@ function parseDealData(rows) {
   const catCol   = col('sales category', '사업관리', 'category');
   const cntryCol = col('sales country', '사업국가', 'country');
   const nameCol2 = col('deal name', 'name');
-  const enrCol   = col('[hq] enr company', 'enr company', 'enr');
+  const enrCol      = col('[hq] enr company', 'enr company', 'enr');
+  // Overseas Product column: "Overseas Product" — values like "Civil NX", "GTS NX", "Gen", "Design"
+  const overseasCol = col('overseas product');
 
   console.log('[DEALS] headerRowIdx:', headerRowIdx, 'dataStartIdx:', dataStartIdx);
   console.log('[DEALS] headers:', JSON.stringify(headers.slice(0,10)));
-  console.log('[DEALS] col indices — amt:', amtCol, 'date:', dateCol, 'stage:', stageCol, 'cat:', catCol, 'cntry:', cntryCol);
+  console.log('[DEALS] col indices — amt:', amtCol, 'date:', dateCol, 'stage:', stageCol, 'cat:', catCol, 'cntry:', cntryCol, 'overseas:', overseasCol);
 
   // Log first 3 data rows to verify
   for (let i = dataStartIdx; i <= Math.min(dataStartIdx+2, rows.length-1); i++) {
     const r = rows[i]||[];
-    console.log('[DEALS] row'+i+': stage='+r[stageCol]+' amount='+r[amtCol]+' date='+r[dateCol]+' cat='+r[catCol]+' cntry='+r[cntryCol]);
+    console.log('[DEALS] row'+i+': stage='+r[stageCol]+' cat='+r[catCol]+' overseas='+(overseasCol>=0?r[overseasCol]:'N/A'));
   }
 
   const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -778,11 +780,23 @@ function parseDealData(rows) {
     return 0;
   };
 
-  const getRegion = (cat, cntry, dealName) => {
+  const getRegion = (cat, cntry, dealName, overseas) => {
     const c = String(cat||'').toLowerCase();
     const n = String(cntry||'').toLowerCase();
     const d = String(dealName||'').toLowerCase();
+    const ov = String(overseas||'').toLowerCase();
+
+    // Canada check first
     if (n.includes('canada') || d.startsWith('(can') || d.includes('- can')) return 'ca';
+
+    // Overseas Product column → Structure or Geotech (higher priority than Sales Category)
+    // Values: "Gen", "Design" → Structure / "GTS NX", "GTS" → Geotech
+    if (ov) {
+      if (/gts/.test(ov))         return 'geo';   // GTS NX → Geotech
+      if (/gen|design/.test(ov))  return 'str';   // Gen, Design → Structure
+    }
+
+    // Sales Category fallback
     if (c.includes('structure') || c.includes('gen'))  return 'str';
     if (c.includes('geotech') || c.includes('gts'))    return 'geo';
     if (c.includes('new')) return 'usNew';
@@ -835,7 +849,7 @@ function parseDealData(rows) {
     const mLabel = MONTH_LABELS[closeDate.getMonth()];
     if (!result[mLabel]) { skipped++; continue; }
 
-    const region = getRegion(row[catCol], row[cntryCol], row[nameCol2]);
+    const region = getRegion(row[catCol], row[cntryCol], row[nameCol2], overseasCol >= 0 ? row[overseasCol] : '');
     const key    = prob === 50 ? 'p50' : 'p80';
     if (result[mLabel][key][region] !== undefined) {
       result[mLabel][key][region] += amount; // 원금액 그대로 표기
